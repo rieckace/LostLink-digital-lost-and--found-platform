@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-300;
+}
+
+.dark body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+/* Lightweight animated background blobs (premium feel, low perf impact) */
+.ll-bg {
+  position: absolute;
+  inset: -20rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ll-blob {
+  position: absolute;
+  width: 42rem;
+  height: 42rem;
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.35;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  background: radial-gradient(circle at 30% 30%, rgb(56 189 248), transparent 55%),
+    radial-gradient(circle at 70% 70%, rgb(168 85 247), transparent 55%);
+}
+
+.dark .ll-blob {
+  opacity: 0.28;
+  background: radial-gradient(circle at 30% 30%, rgb(34 211 238), transparent 55%),
+    radial-gradient(circle at 70% 70%, rgb(99 102 241), transparent 55%);
+}
+
+.ll-blob--a {
+  top: 10rem;
+  left: 6rem;
+  animation: ll-float-a 18s ease-in-out infinite;
+}
+
+.ll-blob--b {
+  top: 26rem;
+  right: 10rem;
+  width: 48rem;
+  height: 48rem;
+  animation: ll-float-b 22s ease-in-out infinite;
+}
+
+.ll-blob--c {
+  bottom: 8rem;
+  left: 22rem;
+  width: 44rem;
+  height: 44rem;
+  animation: ll-float-c 26s ease-in-out infinite;
+}
+
+@keyframes ll-float-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(120px, -60px, 0) scale(1.05);
+  }
+}
+
+@keyframes ll-float-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-140px, 80px, 0) scale(0.97);
+  }
+}
+
+@keyframes ll-float-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(60px, 120px, 0) scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ll-blob {
+    animation: none !important;
+  }
+}
+
+.ll-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
