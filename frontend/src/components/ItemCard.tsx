@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { LostFoundItem } from '../lib/types'
 import { Card } from './ui/Card'
+import { Badge } from './ui/Badge'
 
 export function ItemCard({ item }: { item: LostFoundItem }) {
   const imageUrl = item.imageUrl || 'https://images.unsplash.com/photo-1520975682031-a9271c85c1f5?auto=format&fit=crop&w=1200&q=70'
@@ -15,6 +16,11 @@ export function ItemCard({ item }: { item: LostFoundItem }) {
             className="h-44 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
             loading="lazy"
           />
+          <div className="absolute left-3 top-3">
+            <Badge tone={item.type === 'found' ? 'success' : 'warning'}>
+              {item.type === 'found' ? 'Found' : 'Lost'}
+            </Badge>
+          </div>
         </div>
 
         <div className="p-4">
