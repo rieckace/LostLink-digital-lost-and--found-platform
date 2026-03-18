@@ -1,4 +1,5 @@
 import { FilePlus2, PackageSearch, QrCode } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Navigate } from 'react-router-dom'
 import { EmptyState } from '../components/EmptyState'
@@ -14,8 +15,54 @@ import { useItemsStore } from '../stores/itemsStore'
 
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user)
+  const token = useAuthStore((s) => s.token)
+
   const myReports = useItemsStore((s) => s.myReports)
+  const myItems = useItemsStore((s) => s.myItems)
+  const fetchMyItems = useItemsStore((s) => s.fetchMyItems)
+
   const myClaims = useItemsStore((s) => s.myClaims)
+  const fetchMyClaims = useItemsStore((s) => s.fetchMyClaims)
+
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      if (!token) {
+        if (mounted) setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      await Promise.all([fetchMyItems(token), fetchMyClaims(token)])
+      if (mounted) setLoading(false)
+    }
+
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [fetchMyClaims, fetchMyItems, token])
+
+  const mergedMyItems = useMemo(() => {
+    const merged = [...myItems, ...myReports]
+    const byId = new Map<string, (typeof merged)[number]>()
+    for (const it of merged) {
+      if (!byId.has(it.id)) byId.set(it.id, it)
+    }
+    return Array.from(byId.values())
+  }, [myItems, myReports])
+
+  const myLostItems = useMemo(
+    () => mergedMyItems.filter((it) => it.type === 'lost'),
+    [mergedMyItems],
+  )
+  const myFoundItems = useMemo(
+    () => mergedMyItems.filter((it) => it.type === 'found'),
+    [mergedMyItems],
+  )
 
   if (user?.role === 'admin') {
     return <Navigate to="/admin/claims" replace />
@@ -53,37 +100,66 @@ export function DashboardPage() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
           <Card className="p-6">
-            <div className="text-sm font-semibold">My items</div>
-            <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              Items you reported.
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">My reported items</div>
+                <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                  Your lost and found reports.
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button asChild variant="secondary">
+                  <Link to="/my-reports/lost">View Lost</Link>
+                </Button>
+                <Button asChild variant="secondary">
+                  <Link to="/my-reports/found">View Found</Link>
+                </Button>
+              </div>
             </div>
 
             <div className="mt-5 space-y-3">
-              {myReports.length === 0 ? (
+              {loading ? (
+                <div className="text-sm text-slate-600 dark:text-slate-300">Loading…</div>
+              ) : mergedMyItems.length === 0 ? (
                 <EmptyState
                   title="No reports yet"
                   description="Report a lost or found item to get started."
                 />
               ) : (
-                myReports.map((it) => (
-                  <Link
-                    key={it.id}
-                    to={`/items/${it.id}`}
-                    className="block rounded-2xl p-4 ring-1 ring-slate-200 transition-colors hover:bg-slate-100/70 dark:ring-slate-800 dark:hover:bg-slate-800/60"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold">{it.title}</div>
-                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                          {it.location} • {formatDateShort(it.dateISO)}
-                        </div>
-                      </div>
-                      <Badge tone={it.type === 'found' ? 'success' : 'warning'}>
-                        {it.type === 'found' ? 'Found' : 'Lost'}
-                      </Badge>
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="warning">Lost: {myLostItems.length}</Badge>
+                    <Badge tone="success">Found: {myFoundItems.length}</Badge>
+                  </div>
+
+                  <div className="pt-2">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Recent reports
                     </div>
-                  </Link>
-                ))
+                    <div className="mt-2 space-y-3">
+                      {mergedMyItems.slice(0, 4).map((it) => (
+                        <Link
+                          key={it.id}
+                          to={`/items/${it.id}`}
+                          className="block rounded-2xl p-4 ring-1 ring-slate-200 transition-colors hover:bg-slate-100/70 dark:ring-slate-800 dark:hover:bg-slate-800/60"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold">{it.title}</div>
+                              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                {it.location} • {formatDateShort(it.dateISO)}
+                              </div>
+                            </div>
+                            <Badge tone={it.type === 'found' ? 'success' : 'warning'}>
+                              {it.type === 'found' ? 'Found' : 'Lost'}
+                            </Badge>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </Card>
@@ -95,7 +171,9 @@ export function DashboardPage() {
             </div>
 
             <div className="mt-5 space-y-3">
-              {myClaims.length === 0 ? (
+              {loading ? (
+                <div className="text-sm text-slate-600 dark:text-slate-300">Loading…</div>
+              ) : myClaims.length === 0 ? (
                 <EmptyState
                   title="No claims yet"
                   description="Open an item and submit a claim."
