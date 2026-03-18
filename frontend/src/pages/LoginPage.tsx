@@ -29,6 +29,7 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) })
 
@@ -45,9 +46,20 @@ export function LoginPage() {
 
               <form
                 className="mt-6 grid gap-4"
-                onSubmit={handleSubmit((values) => {
-                  login(values.email, values.password)
-                  navigate(from ?? '/dashboard', { replace: true })
+                onSubmit={handleSubmit(async (values) => {
+                  try {
+                    await login(values.email, values.password)
+
+                    const current = useAuthStore.getState().user
+                    if (current?.role === 'admin') {
+                      navigate('/admin/claims', { replace: true })
+                      return
+                    }
+
+                    navigate(from ?? '/dashboard', { replace: true })
+                  } catch (err: any) {
+                    setError('root', { message: err.message || 'Login failed' })
+                  }
                 })}
               >
                 <div>
@@ -76,8 +88,14 @@ export function LoginPage() {
                   ) : null}
                 </div>
 
+                {errors.root && (
+                  <div className="text-sm font-medium text-rose-600 bg-rose-50 dark:bg-rose-900/30 dark:text-rose-400 p-3 rounded-lg">
+                    {errors.root.message}
+                  </div>
+                )}
+
                 <Button type="submit" disabled={isSubmitting}>
-                  Login
+                  {isSubmitting ? 'Logging in...' : 'Login'}
                 </Button>
 
                 <div className="text-sm text-slate-600 dark:text-slate-300">

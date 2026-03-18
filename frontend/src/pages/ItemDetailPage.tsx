@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useParams } from 'react-router-dom'
 import { z } from 'zod'
@@ -17,8 +17,10 @@ import { Container } from '../layouts/Container'
 import { cn } from '../lib/cn'
 import { formatDateShort } from '../lib/format'
 import { getMatchInsights } from '../lib/ai'
+import { resolveApiBase } from '../lib/apiBase'
 import { useAuthStore } from '../stores/authStore'
 import { useItemsStore } from '../stores/itemsStore'
+import type { LostFoundItem } from '../lib/types'
 
 const claimSchema = z.object({
   fullName: z.string().min(2, 'Enter your name'),
@@ -33,19 +35,75 @@ export function ItemDetailPage() {
   const user = useAuthStore((s) => s.user)
 
   const submitClaim = useItemsStore((s) => s.submitClaim)
-  const items = useItemsStore((s) => s.items)
-  const myReports = useItemsStore((s) => s.myReports)
+  const [loadingItem, setLoadingItem] = useState(true)
+  const [itemError, setItemError] = useState<string | null>(null)
+  const [item, setItem] = useState<LostFoundItem | null>(null)
+  const [redacted, setRedacted] = useState(false)
 
-  const item = useMemo(() => {
-    if (!id) return null
-    return items.find((x) => x.id === id) ?? myReports.find((x) => x.id === id) ?? null
-  }, [id, items, myReports])
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      if (!id) return
+      setItemError(null)
+      setLoadingItem(true)
+      try {
+        const API_URL = await resolveApiBase()
+        const res = await fetch(`${API_URL}/items/${encodeURIComponent(id)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          throw new Error(data?.error || 'Failed to load item')
+        }
+
+        const it = data?.item as any
+        const mapped: LostFoundItem | null = it?.id
+          ? {
+              id: String(it.id),
+              type: (it.type ?? 'lost') as any,
+              title: String(it.title ?? ''),
+              description: String(it.description ?? ''),
+              category: (it.category ?? 'Other') as any,
+              location: String(it.location ?? ''),
+              locationLabel: typeof it.locationLabel === 'string' ? it.locationLabel : undefined,
+              lat: typeof it.lat === 'number' ? it.lat : undefined,
+              lng: typeof it.lng === 'number' ? it.lng : undefined,
+              dateISO: String(it.dateISO ?? ''),
+              tags: Array.isArray(it.tags) ? it.tags.map((t: any) => String(t)) : [],
+              imageUrl: typeof it.imageUrl === 'string' ? it.imageUrl : '',
+              matchScore: 0,
+              matchingTags: [],
+            }
+          : null
+
+        if (mounted) {
+          setItem(mapped)
+          setRedacted(Boolean(data?.redacted))
+        }
+      } catch (e) {
+        if (mounted) {
+          setItemError(e instanceof Error ? e.message : 'Failed to load item')
+          setItem(null)
+          setRedacted(false)
+        }
+      } finally {
+        if (mounted) setLoadingItem(false)
+      }
+    }
+
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [id, token])
 
   const matching = useMemo(() => new Set(item?.matchingTags ?? []), [item?.matchingTags])
-  const insights = useMemo(() => (item ? getMatchInsights(item) : null), [item])
+  const insights = useMemo(() => (item && !redacted ? getMatchInsights(item) : null), [item, redacted])
 
   const [file, setFile] = useState<File | null>(null)
   const [submitted, setSubmitted] = useState(false)
+
+  const [claimError, setClaimError] = useState<string | null>(null)
 
   const {
     register,
@@ -59,13 +117,25 @@ export function ItemDetailPage() {
     },
   })
 
-  if (!item) {
+  if (loadingItem) {
+    return (
+      <PageTransition>
+        <Container className="py-10">
+          <Card className="p-6">
+            <div className="text-sm text-slate-600 dark:text-slate-300">Loading…</div>
+          </Card>
+        </Container>
+      </PageTransition>
+    )
+  }
+
+  if (itemError || !item) {
     return (
       <PageTransition>
         <Container className="py-10">
           <EmptyState
             title="Item not found"
-            description="Try browsing items again."
+            description={itemError ? itemError : 'Try browsing items again.'}
           />
           <div className="mt-4">
             <Button asChild variant="secondary">
@@ -84,7 +154,7 @@ export function ItemDetailPage() {
       <Container className="py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Button asChild variant="ghost">
-            <Link to="/browse">
+            <Link to={user?.role === 'admin' ? '/admin/items' : '/browse'}>
               <ArrowLeft className="h-4 w-4" /> Browse
             </Link>
           </Button>
@@ -100,46 +170,56 @@ export function ItemDetailPage() {
         <div className="mt-6 grid gap-6 lg:grid-cols-5">
           <Card className="overflow-hidden lg:col-span-3">
             <img
-              src={item.imageUrl}
+              src={
+                item.imageUrl ||
+                'https://images.unsplash.com/photo-1520975682031-a9271c85c1f5?auto=format&fit=crop&w=1200&q=70'
+              }
               alt={item.title}
               className="h-[340px] w-full object-cover"
             />
             <div className="p-6">
               <div className="text-xl font-semibold tracking-tight">{item.title}</div>
-              <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                {item.description}
-              </div>
 
-              <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <span className="rounded-full bg-slate-100 px-2 py-1 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700">
-                  {item.category}
-                </span>
-                <span className="rounded-full bg-slate-100 px-2 py-1 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700">
-                  {item.location}
-                </span>
-                <span className="rounded-full bg-slate-100 px-2 py-1 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700">
-                  {formatDateShort(item.dateISO)}
-                </span>
-              </div>
+              {!redacted ? (
+                <>
+                  <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{item.description}</div>
 
-              <div className="mt-5">
-                <div className="text-sm font-semibold">Tags</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {item.tags.map((t) => (
-                    <span
-                      key={t}
-                      className={cn(
-                        'rounded-full px-2 py-1 text-xs ring-1',
-                        matching.has(t)
-                          ? 'bg-sky-100 text-sky-800 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-200 dark:ring-sky-800'
-                          : 'bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800/60 dark:text-slate-200 dark:ring-slate-700',
-                      )}
-                    >
-                      {t}
+                  <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700">
+                      {item.category}
                     </span>
-                  ))}
+                    <span className="rounded-full bg-slate-100 px-2 py-1 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700">
+                      {item.location}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:ring-slate-700">
+                      {formatDateShort(item.dateISO)}
+                    </span>
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="text-sm font-semibold">Tags</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {item.tags.map((t) => (
+                        <span
+                          key={t}
+                          className={cn(
+                            'rounded-full px-2 py-1 text-xs ring-1',
+                            matching.has(t)
+                              ? 'bg-sky-100 text-sky-800 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-200 dark:ring-sky-800'
+                              : 'bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800/60 dark:text-slate-200 dark:ring-slate-700',
+                          )}
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                  Details are visible only to the reporter and admin.
                 </div>
-              </div>
+              )}
             </div>
           </Card>
 
@@ -186,7 +266,23 @@ export function ItemDetailPage() {
               </Card>
             ) : null}
 
-            <Card className="p-6">
+            {user?.role === 'admin' ? (
+              <Card className="p-6">
+                <div className="text-sm font-semibold">Admin view</div>
+                <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                  Admin accounts don’t submit claims. Review claims from the admin dashboard.
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button asChild>
+                    <Link to="/admin/claims">Open Admin Dashboard</Link>
+                  </Button>
+                  <Button asChild variant="secondary">
+                    <Link to="/admin/items">Review Items</Link>
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              <Card className="p-6">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold">Claim this item</div>
@@ -213,11 +309,41 @@ export function ItemDetailPage() {
               ) : (
                 <form
                   className="mt-5 grid gap-4"
-                  onSubmit={handleSubmit(() => {
-                    submitClaim(item)
-                    setSubmitted(true)
+                  onSubmit={handleSubmit(async (values) => {
+                    setClaimError(null)
+                    // Persist to backend claim system
+                    try {
+                      const API_URL = await resolveApiBase()
+                      const res = await fetch(`${API_URL}/claims`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${token ?? ''}`,
+                        },
+                        body: JSON.stringify({
+                          itemId: item.id,
+                          proofText: values.details,
+                        }),
+                      })
+                      const data = await res.json()
+                      if (!res.ok) {
+                        throw new Error(data?.error || 'Failed to submit claim')
+                      }
+
+                      // Keep local dashboard experience consistent
+                      submitClaim(item)
+                      setSubmitted(true)
+                    } catch (e) {
+                      setClaimError(e instanceof Error ? e.message : 'Failed to submit claim')
+                    }
                   })}
                 >
+                  {claimError ? (
+                    <div className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-800 ring-1 ring-rose-200 dark:bg-rose-900/20 dark:text-rose-200 dark:ring-rose-800">
+                      {claimError}
+                    </div>
+                  ) : null}
+
                   {submitted ? (
                     <div className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:ring-emerald-800">
                       <div className="inline-flex items-center gap-2 font-medium">
@@ -273,7 +399,8 @@ export function ItemDetailPage() {
                   </Button>
                 </form>
               )}
-            </Card>
+              </Card>
+            )}
           </div>
         </div>
       </Container>

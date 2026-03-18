@@ -17,9 +17,11 @@ import { useItemsStore } from '../stores/itemsStore'
 const dateOptions = ['Any', 'Last 7 days'] as const
 
 export function BrowseItemsPage() {
-  const items = useItemsStore((s) => s.filteredItems())
+  const storeItems = useItemsStore((s) => s.items)
+  const myReports = useItemsStore((s) => s.myReports)
   const filters = useItemsStore((s) => s.filters)
   const setFilter = useItemsStore((s) => s.setFilter)
+  const fetchItems = useItemsStore((s) => s.fetchItems)
 
   const [suggestOpen, setSuggestOpen] = useState(false)
   const suggestRef = useRef<HTMLDivElement | null>(null)
@@ -28,29 +30,70 @@ export function BrowseItemsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let mounted = true
     setLoading(true)
-    const t = window.setTimeout(() => setLoading(false), 280)
-    return () => window.clearTimeout(t)
-  }, [filters.query, filters.category, filters.location, filters.date])
+    fetchItems().finally(() => {
+      if (mounted) setLoading(false)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [fetchItems])
 
   const debouncedQuery = useDebouncedValue(filters.query, 150)
 
+  const items = useMemo(() => {
+    const { query, category, location, date } = filters
+    const q = query.trim().toLowerCase()
+    // De-dup by id: a freshly reported item can exist in both `myReports` and API `items`.
+    const byId = new Map<string, (typeof storeItems)[number]>()
+    for (const it of [...myReports, ...storeItems]) {
+      if (!byId.has(it.id)) byId.set(it.id, it)
+    }
+    const allItems = Array.from(byId.values())
+
+    return allItems.filter((it) => {
+      const matchesQuery =
+        !q ||
+        (it.title ?? '').toLowerCase().includes(q) ||
+        (it.description ?? '').toLowerCase().includes(q) ||
+        (it.location ?? '').toLowerCase().includes(q) ||
+        (it.tags ?? []).some((t) => (t ?? '').toLowerCase().includes(q))
+
+      const matchesCategory = category === 'All' || it.category === category
+      const matchesLocation = location === 'All' || it.location === location
+
+      const matchesDate =
+        date === 'Any'
+          ? true
+          : date === 'Last 7 days'
+            ? new Date(it.dateISO).getTime() >= Date.now() - 7 * 24 * 60 * 60 * 1000
+            : true
+
+      return matchesQuery && matchesCategory && matchesLocation && matchesDate
+    })
+  }, [filters, myReports, storeItems])
+
   const suggestions = useMemo(() => {
     const q = debouncedQuery.trim().toLowerCase()
-    const state = useItemsStore.getState()
-    const all = [...state.myReports, ...state.items]
+    // De-dup for suggestions as well.
+    const byId = new Map<string, (typeof storeItems)[number]>()
+    for (const it of [...myReports, ...storeItems]) {
+      if (!byId.has(it.id)) byId.set(it.id, it)
+    }
+    const all = Array.from(byId.values())
 
     if (!q) {
       const pool = new Set<string>()
 
       for (const it of all) {
-        for (const tag of it.tags) pool.add(tag)
+        for (const tag of it.tags ?? []) pool.add(tag)
       }
       for (const it of all) {
-        pool.add(it.location)
+        if (it.location) pool.add(it.location)
       }
       for (const it of all) {
-        pool.add(it.title)
+        if (it.title) pool.add(it.title)
       }
 
       return Array.from(pool).slice(0, 6)
@@ -58,15 +101,17 @@ export function BrowseItemsPage() {
 
     const pool = new Set<string>()
     for (const it of all) {
-      if (it.title.toLowerCase().includes(q)) pool.add(it.title)
-      if (it.location.toLowerCase().includes(q)) pool.add(it.location)
-      for (const tag of it.tags) {
-        if (tag.toLowerCase().includes(q)) pool.add(tag)
+      const title = it.title ?? ''
+      const location = it.location ?? ''
+      if (title.toLowerCase().includes(q)) pool.add(title)
+      if (location.toLowerCase().includes(q)) pool.add(location)
+      for (const tag of it.tags ?? []) {
+        if ((tag ?? '').toLowerCase().includes(q)) pool.add(tag)
       }
     }
 
     return Array.from(pool).slice(0, 6)
-  }, [debouncedQuery])
+  }, [debouncedQuery, myReports, storeItems])
 
   return (
     <PageTransition>

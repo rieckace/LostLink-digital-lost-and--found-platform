@@ -1,0 +1,14 @@
+{
+  "watch": ["src"],
+  "ext": "ts,json",
+  "ignore": [
+    "dist/**",
+    "node_modules/**",
+    "tsconfig.tsbuildinfo",
+    "src/**/*.js",
+    "src/**/*.map",
+    "src/**/*.d.ts"
+  ],
+  "exec": "ts-node src/index.ts",
+  "delay": 200
+}

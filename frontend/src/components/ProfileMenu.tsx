@@ -23,6 +23,11 @@ export function ProfileMenu() {
 
   if (!user) return null
 
+  const dashboardPath = user.role === 'admin' ? '/admin/claims' : '/dashboard'
+  const secondaryPath = user.role === 'admin' ? '/admin/items' : '/dashboard'
+  const secondaryLabel = user.role === 'admin' ? 'Review Items' : 'My Items'
+  const secondaryIcon = <PackageSearch className="h-4 w-4" />
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -51,7 +56,7 @@ export function ProfileMenu() {
       {open ? (
         <Card className="absolute right-0 z-50 mt-2 w-[240px] p-2">
           <Link
-            to="/dashboard"
+            to={dashboardPath}
             className={cn(
               'flex items-center gap-2 rounded-xl px-3 py-2 text-sm',
               'hover:bg-slate-100/70 dark:hover:bg-slate-800/60',
@@ -59,18 +64,18 @@ export function ProfileMenu() {
             onClick={() => setOpen(false)}
           >
             <LayoutDashboard className="h-4 w-4" />
-            Dashboard
+            {user.role === 'admin' ? 'Admin Dashboard' : 'Dashboard'}
           </Link>
           <Link
-            to="/dashboard"
+            to={secondaryPath}
             className={cn(
               'flex items-center gap-2 rounded-xl px-3 py-2 text-sm',
               'hover:bg-slate-100/70 dark:hover:bg-slate-800/60',
             )}
             onClick={() => setOpen(false)}
           >
-            <PackageSearch className="h-4 w-4" />
-            My Items
+            {secondaryIcon}
+            {secondaryLabel}
           </Link>
           <button
             type="button"

@@ -1,0 +1,39 @@
+graph TD
+    subgraph Frontend [LostLink Client Application]
+        A1[User Submits Form] --> |Photos, Description, Map Pin| B{Report Type}
+        B --> |Lost Item| C1[Lost Form Context]
+        B --> |Found Item| C2[Found Form Context]
+    end
+
+    subgraph API Layer [Backend Services]
+        D[Express/Fastify API]
+    end
+
+    subgraph AI Processing [LLM Engine]
+        E1[Vision Model] --> |Extracts features from photo| E3[Data Normalization]
+        E2[Text Model] --> |Extracts entities from description| E3
+        E3 --> |Outputs JSON: brand, color, category, distinguishing marks| E4[Embedding Generation]
+    end
+
+    subgraph Data Store [Database & Location]
+        F1[(PostgreSQL + PostGIS)]
+        F2[(Vector DB / pgvector)]
+    end
+
+    C1 --> |Payload| D
+    C2 --> |Payload| D
+
+    D --> |Images| E1
+    D --> |Text| E2
+
+    D --> |Lat/Lng Coords| F1
+
+    E3 --> |Structured Metadata| F1
+    E4 --> |Vectors| F2
+
+
+    F1 <--> |Radius Filtering query: ST_DWithin| M[Match Engine]
+    F2 <--> |Cosine Similarity| M
+
+    M --> |High Confidence Match| N[Notification Service Push/Email]
+    M --> |Stores Match % in DB| F1

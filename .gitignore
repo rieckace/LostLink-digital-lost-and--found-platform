@@ -1,0 +1,33 @@
+# Root ignore for LostLink monorepo
+
+# Dependencies
+**/node_modules/
+
+# Build outputs
+**/dist/
+**/dist-ssr/
+**/.vite/
+
+# Logs
+**/logs/
+**/*.log
+
+# Environment files (never commit real secrets)
+.env
+.env.*
+!**/.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# TypeScript
+**/*.tsbuildinfo
+
+# Misc
+coverage/
+
+# Potential local secret/id file
+c.id

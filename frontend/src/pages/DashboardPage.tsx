@@ -1,5 +1,6 @@
-import { FilePlus2, PackageSearch } from 'lucide-react'
+import { FilePlus2, PackageSearch, QrCode } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { EmptyState } from '../components/EmptyState'
 import { PageTransition } from '../components/PageTransition'
 import { StatusBadge } from '../components/StatusBadge'
@@ -16,6 +17,10 @@ export function DashboardPage() {
   const myReports = useItemsStore((s) => s.myReports)
   const myClaims = useItemsStore((s) => s.myClaims)
 
+  if (user?.role === 'admin') {
+    return <Navigate to="/admin/claims" replace />
+  }
+
   return (
     <PageTransition>
       <Container className="py-10">
@@ -31,6 +36,11 @@ export function DashboardPage() {
             <Button asChild>
               <Link to="/report/lost">
                 <FilePlus2 className="h-4 w-4" /> Report Lost
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link to="/assets">
+                <QrCode className="h-4 w-4" /> My QR Tags
               </Link>
             </Button>
             <Button asChild variant="secondary">

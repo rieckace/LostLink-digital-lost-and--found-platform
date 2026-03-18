@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { AnimatedBackground } from '../components/AnimatedBackground'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 import { Footer } from '../components/Footer'
 import { Navbar } from '../components/Navbar'
 
@@ -10,7 +11,9 @@ export function AppShell() {
       <div className="relative flex min-h-dvh flex-col">
         <Navbar />
         <main className="flex-1">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
         <Footer />
       </div>

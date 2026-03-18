@@ -8,17 +8,23 @@ import { categories, commonLocations } from '../data/mockItems'
 import { suggestTagsFromText } from '../lib/ai'
 import type { ItemType, LostFoundItem } from '../lib/types'
 import { FileUploadField } from './FileUploadField'
+import { LocationPicker, type LatLng } from './LocationPicker'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
 import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Textarea } from './ui/Textarea'
 import { useItemsStore } from '../stores/itemsStore'
+import { useAuthStore } from '../stores/authStore'
+import { resolveApiBase } from '../lib/apiBase'
 
 const schema = z.object({
   title: z.string().min(3, 'Enter a clear item title'),
   category: z.string().min(1, 'Select a category'),
   location: z.string().min(1, 'Select a location'),
+  locationLabel: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
   dateISO: z.string().min(1, 'Select a date'),
   description: z.string().min(10, 'Add a bit more detail'),
   tags: z.string().optional(),
@@ -28,13 +34,17 @@ type FormValues = z.infer<typeof schema>
 
 export function ReportItemForm({ type }: { type: ItemType }) {
   const addReport = useItemsStore((s) => s.addReport)
+  const addReportedItem = useItemsStore((s) => s.addReportedItem)
+  const token = useAuthStore((s) => s.token)
 
   const [file, setFile] = useState<File | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const {
     register,
     handleSubmit,
+    watch,
     getValues,
     setValue,
     formState: { errors, isSubmitting },
@@ -47,6 +57,7 @@ export function ReportItemForm({ type }: { type: ItemType }) {
       description: '',
       title: '',
       tags: '',
+      locationLabel: '',
     },
   })
 
@@ -62,6 +73,10 @@ export function ReportItemForm({ type }: { type: ItemType }) {
       : 'https://images.unsplash.com/photo-1520975682031-a9271c85c1f5?auto=format&fit=crop&w=1200&q=70'
   }, [type])
 
+  const lat = watch('lat')
+  const lng = watch('lng')
+  const locationLabel = watch('locationLabel')
+
   return (
     <Card className="p-6">
       <div className="flex items-start justify-between gap-4">
@@ -76,27 +91,113 @@ export function ReportItemForm({ type }: { type: ItemType }) {
 
       <form
         className="mt-6 grid gap-4"
-        onSubmit={handleSubmit((values) => {
+        onSubmit={handleSubmit(async (values) => {
+          setSubmitError(null)
+
           const tagList = (values.tags ?? '')
             .split(',')
             .map((t) => t.trim())
             .filter(Boolean)
 
-          const item: Omit<LostFoundItem, 'id'> = {
+          let nextImageUrl = defaultImg
+
+          if (file && !token) {
+            setSubmitError('Please login to upload an image.')
+            return
+          }
+
+          if (file) {
+            try {
+              const API_URL = await resolveApiBase()
+              const form = new FormData()
+              form.append('file', file)
+
+              const uploadRes = await fetch(`${API_URL}/uploads/image`, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token ?? ''}`,
+                },
+                body: form,
+              })
+              const uploadData = await uploadRes.json()
+              if (!uploadRes.ok) throw new Error(uploadData?.error || 'Failed to upload image')
+
+              if (typeof uploadData?.url === 'string' && uploadData.url) {
+                nextImageUrl = uploadData.url
+              }
+            } catch (e) {
+              setSubmitError(
+                `${e instanceof Error ? e.message : 'Failed to upload image'}. Using default image instead.`,
+              )
+              nextImageUrl = defaultImg
+            }
+          }
+
+          const localItem: Omit<LostFoundItem, 'id'> = {
             type,
             title: values.title,
             category: values.category as LostFoundItem['category'],
             location: values.location,
+            locationLabel: values.locationLabel || undefined,
+            lat: values.lat,
+            lng: values.lng,
             dateISO: values.dateISO,
             description: values.description,
             tags: tagList.length ? tagList : [type, values.category.toLowerCase()],
-            imageUrl: defaultImg,
+            imageUrl: nextImageUrl,
             matchScore: type === 'lost' ? 0.55 : 0.72,
             matchingTags: tagList.slice(0, 2),
           }
 
-          addReport(item)
-          setSubmitted(true)
+          // Save to backend (MongoDB)
+          try {
+            const API_URL = await resolveApiBase()
+            const res = await fetch(`${API_URL}/items`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token ?? ''}`,
+              },
+              body: JSON.stringify({
+                ...localItem,
+                // backend expects tags array
+                tags: localItem.tags,
+              }),
+            })
+            const data = await res.json()
+
+            if (!res.ok) {
+              throw new Error(data?.error || 'Failed to submit report')
+            }
+
+            const apiItem = data?.item as any
+
+            if (apiItem?.id) {
+              const saved: LostFoundItem = {
+                ...localItem,
+                id: String(apiItem.id),
+                imageUrl: apiItem.imageUrl ?? localItem.imageUrl,
+                location: apiItem.location ?? localItem.location,
+                locationLabel: apiItem.locationLabel ?? localItem.locationLabel,
+                lat: apiItem.lat ?? localItem.lat,
+                lng: apiItem.lng ?? localItem.lng,
+              }
+              addReportedItem(saved)
+            } else {
+              // Fallback to local-only report if backend response is unexpected
+              addReport(localItem)
+            }
+
+            setSubmitted(true)
+          } catch (err) {
+            addReport(localItem)
+            setSubmitted(true)
+            setSubmitError(
+              err instanceof Error
+                ? `${err.message}. Saved locally, but not in database.`
+                : 'Saved locally, but not in database.',
+            )
+          }
         })}
       >
         {submitted ? (
@@ -112,6 +213,12 @@ export function ReportItemForm({ type }: { type: ItemType }) {
                 <Link to="/browse">Browse Items</Link>
               </Button>
             </div>
+          </div>
+        ) : null}
+
+        {submitError ? (
+          <div className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-800 ring-1 ring-rose-200 dark:bg-rose-900/20 dark:text-rose-200 dark:ring-rose-800">
+            {submitError}
           </div>
         ) : null}
 
@@ -155,18 +262,46 @@ export function ReportItemForm({ type }: { type: ItemType }) {
           <div>
             <label className="text-sm font-medium">Location</label>
             <div className="mt-2">
-              <Select {...register('location')}>
+              <Input
+                list="common-locations"
+                placeholder="E.g., Central Library"
+                {...register('location')}
+              />
+              <datalist id="common-locations">
                 {commonLocations.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
+                  <option key={l} value={l} />
                 ))}
-              </Select>
+              </datalist>
               {errors.location ? (
                 <div className="mt-1 text-xs text-rose-600">{errors.location.message}</div>
               ) : null}
             </div>
           </div>
+        </div>
+
+        <div className="grid gap-3">
+          <LocationPicker
+            value={
+              typeof lat === 'number' && typeof lng === 'number'
+                ? ({ lat, lng } satisfies LatLng)
+                : null
+            }
+            onChange={(v) => {
+              setValue('lat', v.lat, { shouldDirty: true })
+              setValue('lng', v.lng, { shouldDirty: true })
+              setValue('location', `${v.lat.toFixed(6)}, ${v.lng.toFixed(6)}`, { shouldDirty: true })
+            }}
+            onLabelChange={(label) => {
+              setValue('locationLabel', label, { shouldDirty: true })
+              setValue('location', label, { shouldDirty: true })
+            }}
+          />
+
+          {locationLabel ? (
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              Pin label: {locationLabel}
+            </div>
+          ) : null}
         </div>
 
         <div>

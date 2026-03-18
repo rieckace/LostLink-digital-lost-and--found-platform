@@ -10,12 +10,18 @@ import { ProfileMenu } from './ProfileMenu'
 import { ThemeToggle } from './ThemeToggle'
 import { Button } from './ui/Button'
 
-const links = [
+const userLinks = [
   { to: '/', label: 'Home' },
   { to: '/report/lost', label: 'Report Lost' },
   { to: '/report/found', label: 'Report Found' },
   { to: '/browse', label: 'Browse Items' },
   { to: '/dashboard', label: 'Dashboard' },
+]
+
+const adminLinks = [
+  { to: '/', label: 'Home' },
+  { to: '/admin/items', label: 'Review Items' },
+  { to: '/admin/claims', label: 'Admin Dashboard' },
 ]
 
 function NavItem({ to, label, onClick }: { to: string; label: string; onClick?: () => void }) {
@@ -40,7 +46,10 @@ function NavItem({ to, label, onClick }: { to: string; label: string; onClick?: 
 
 export function Navbar() {
   const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const links = user?.role === 'admin' ? adminLinks : userLinks
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/60 bg-white/60 backdrop-blur dark:border-slate-800/60 dark:bg-slate-950/40">

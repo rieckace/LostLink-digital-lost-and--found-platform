@@ -32,6 +32,7 @@ export function SignupPage() {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) })
 
@@ -48,9 +49,13 @@ export function SignupPage() {
 
               <form
                 className="mt-6 grid gap-4"
-                onSubmit={handleSubmit((values) => {
-                  signup(values.name, values.email, values.password)
-                  navigate('/dashboard', { replace: true })
+                onSubmit={handleSubmit(async (values) => {
+                  try {
+                    await signup(values.name, values.email, values.password)
+                    navigate('/dashboard', { replace: true })
+                  } catch (err: any) {
+                    setError('root', { message: err.message || 'Signup failed' })
+                  }
                 })}
               >
                 <div>
@@ -107,8 +112,14 @@ export function SignupPage() {
                   ) : null}
                 </div>
 
+                {errors.root && (
+                  <div className="text-sm font-medium text-rose-600 bg-rose-50 dark:bg-rose-900/30 dark:text-rose-400 p-3 rounded-lg">
+                    {errors.root.message}
+                  </div>
+                )}
+
                 <Button type="submit" disabled={isSubmitting}>
-                  Sign up
+                  {isSubmitting ? 'Signing up...' : 'Sign up'}
                 </Button>
 
                 <div className="text-sm text-slate-600 dark:text-slate-300">

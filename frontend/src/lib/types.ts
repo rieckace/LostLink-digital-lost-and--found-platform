@@ -19,6 +19,9 @@ export type LostFoundItem = {
   description: string
   category: ItemCategory
   location: string
+  locationLabel?: string
+  lat?: number
+  lng?: number
   dateISO: string
   tags: string[]
   imageUrl: string
@@ -38,4 +41,5 @@ export type User = {
   id: string
   name: string
   email: string
+  role: 'user' | 'admin'
 }
