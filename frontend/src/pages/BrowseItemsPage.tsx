@@ -18,7 +18,6 @@ const dateOptions = ['Any', 'Last 7 days'] as const
 
 export function BrowseItemsPage() {
   const storeItems = useItemsStore((s) => s.items)
-  const myReports = useItemsStore((s) => s.myReports)
   const filters = useItemsStore((s) => s.filters)
   const setFilter = useItemsStore((s) => s.setFilter)
   const fetchItems = useItemsStore((s) => s.fetchItems)
@@ -45,12 +44,7 @@ export function BrowseItemsPage() {
   const items = useMemo(() => {
     const { query, category, location, date } = filters
     const q = query.trim().toLowerCase()
-    // De-dup by id: a freshly reported item can exist in both `myReports` and API `items`.
-    const byId = new Map<string, (typeof storeItems)[number]>()
-    for (const it of [...myReports, ...storeItems]) {
-      if (!byId.has(it.id)) byId.set(it.id, it)
-    }
-    const allItems = Array.from(byId.values())
+    const allItems = storeItems
 
     return allItems.filter((it) => {
       const matchesQuery =
@@ -72,16 +66,11 @@ export function BrowseItemsPage() {
 
       return matchesQuery && matchesCategory && matchesLocation && matchesDate
     })
-  }, [filters, myReports, storeItems])
+  }, [filters, storeItems])
 
   const suggestions = useMemo(() => {
     const q = debouncedQuery.trim().toLowerCase()
-    // De-dup for suggestions as well.
-    const byId = new Map<string, (typeof storeItems)[number]>()
-    for (const it of [...myReports, ...storeItems]) {
-      if (!byId.has(it.id)) byId.set(it.id, it)
-    }
-    const all = Array.from(byId.values())
+    const all = storeItems
 
     if (!q) {
       const pool = new Set<string>()
@@ -111,7 +100,7 @@ export function BrowseItemsPage() {
     }
 
     return Array.from(pool).slice(0, 6)
-  }, [debouncedQuery, myReports, storeItems])
+  }, [debouncedQuery, storeItems])
 
   return (
     <PageTransition>
