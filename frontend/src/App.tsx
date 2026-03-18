@@ -16,6 +16,8 @@ import { HomePage } from './pages/HomePage'
 import { ItemDetailPage } from './pages/ItemDetailPage'
 import { LoginPage } from './pages/LoginPage'
 import { MyAssetsPage } from './pages/MyAssetsPage'
+import { MyFoundReportsPage } from './pages/MyFoundReportsPage'
+import { MyLostReportsPage } from './pages/MyLostReportsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { QrScanPage } from './pages/QrScanPage'
 import { ReportFoundPage } from './pages/ReportFoundPage'
@@ -63,6 +65,23 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/my-reports/lost"
+              element={
+                <ProtectedRoute>
+                  <MyLostReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/my-reports/found"
+              element={
+                <ProtectedRoute>
+                  <MyFoundReportsPage />
                 </ProtectedRoute>
               }
             />
