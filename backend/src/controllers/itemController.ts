@@ -151,6 +151,38 @@ export const getItemById = async (req: Request, res: Response) => {
   }
 };
 
+export const getMyItems = async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+  const type = (req.query.type as string | undefined)?.toLowerCase();
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const filters: any = { userId };
+    if (type && ['lost', 'found'].includes(type)) {
+      filters.type = type;
+    }
+
+    const items = await ItemModel.find(filters)
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    const normalized = (items as any[]).map((it) => ({
+      ...it,
+      id: it._id?.toString?.() ?? String(it._id),
+      userId: it.userId?.toString?.() ?? String(it.userId),
+    }));
+
+    res.status(200).json({ items: normalized });
+  } catch (error) {
+    console.error('Get My Items error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 export const flagItem = async (req: Request, res: Response) => {
   const itemId = req.params.id as string;
   const { reason } = req.body as { reason: string };
